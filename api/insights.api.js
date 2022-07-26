@@ -12,7 +12,7 @@ export function getFlipTVL() {
 }
 
 export function getRunePrice() {
-  return $axiosInstace.get(INSIGHT_URL + `1aaa2137-b392-40a1-a9ce-22512f02d722/data/latest`);
+  return $axiosInstace.get(INSIGHT_URL + `02011705-4694-45ec-9ada-d76127dc7956/data/latest`);
 }
 
 export function getDailySwap() {

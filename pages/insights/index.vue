@@ -43,15 +43,17 @@
 <script>
 import moment from "moment";
 import { momentTimeFormat, runeCur } from '~/utils';
+import _ from "lodash";
 
 import { use } from "echarts/core";
 import { SVGRenderer } from "echarts/renderers";
-import { LineChart, BarChart } from "echarts/charts";
+import { LineChart, BarChart, CandlestickChart } from "echarts/charts";
 import {
   TitleComponent,
   TooltipComponent,
   LegendComponent,
-  GridComponent
+  GridComponent,
+  DataZoomComponent
 } from "echarts/components";
 import VChart from "vue-echarts";
 
@@ -60,8 +62,10 @@ use([
   GridComponent,
   LineChart,
   BarChart,
+  CandlestickChart,
   TitleComponent,
   TooltipComponent,
+  DataZoomComponent,
   LegendComponent
 ]);
 
@@ -92,7 +96,8 @@ export default {
         }
       ],
       tvlOption: undefined,
-      runePriceOption: undefined
+      runePriceOption: undefined,
+      swapCountChart: undefined
     }
   },
   mounted() {
@@ -164,11 +169,11 @@ export default {
           },
           axisLine: {
             lineStyle: {
-              color: '#9f9f9f'
+              color: 'var(--font-color)'
             }
           },
           axisLabel: {
-            color: '#9f9f9f',
+            color: 'var(--font-color)',
             fontFamily: 'ProductSans',
           }
         },
@@ -209,11 +214,48 @@ export default {
     runePriceFormat(d) {
       let xAxis = [];
       let runePrice = [];
-      let determinPrice = [];
+      let volume = [];
+      let lastDate = undefined;
+      let sameDay = [];
       d.forEach(interval => {
-        xAxis.push(moment(interval.DATE).format("YY/MM/DD HH:MM A"));
-        runePrice.push(interval.DAILY_RUNE_PRICE);
-        determinPrice.push(interval.DETERMINISTIC_RUNE_PRICE);
+        let date = moment(interval.DATE);
+        if (!lastDate) {
+          lastDate = date;
+        }
+        if (date.isSame(lastDate, 'day')) {
+          sameDay.push({date, price: interval.DAILY_RUNE_PRICE});
+        }
+        else {
+          let minPrice = _.min(sameDay.map(d => d.price))
+          let maxPrice = _.max(sameDay.map(d => d.price))
+          let closePrice = sameDay[0].price
+          let openPrice = sameDay[0].price
+          let minM = sameDay[0].date
+          let maxM = sameDay[0].date
+          let vol = 0
+          sameDay.forEach((d, i) => {
+
+            if (d.date.isBefore(minM)) {
+              minM = d.date
+              openPrice = d.price
+            }
+            if (d.date.isAfter(maxM)) {
+              maxM = d.date
+              closePrice = d.price
+            }
+            if (d.vol) {
+              vol = d.vol;
+            }
+          })
+          runePrice.push([openPrice, closePrice, minPrice, maxPrice])
+          xAxis.push(moment(date).format("YY/MM/DD"))
+          volume.push(vol)
+
+          // add the new date
+          lastDate = undefined;
+          sameDay = [];
+          sameDay.push({date, price: interval.DAILY_RUNE_PRICE, vol: interval.TOTAL_SWAP_VOLUME_USD});
+        }
       });
 
       let option = {
@@ -223,9 +265,12 @@ export default {
         tooltip: {
           confine: true,
           trigger: "axis",
-          valueFormatter: (value) => `$${value.toFixed(2)}`
+          axisPointer: {
+            type: 'cross'
+          }
         },
         legend: {
+          show: false,
           x: 'center',
           y: 'bottom',
           icon: 'rect',
@@ -233,6 +278,20 @@ export default {
             color: "var(--font-color)"
           }
         },
+        dataZoom: [
+          {
+            type: 'inside',
+            start: 50,
+            end: 100
+          },
+          {
+            show: true,
+            type: 'slider',
+            top: '90%',
+            start: 50,
+            end: 100
+          }
+        ],
         xAxis: {
           data: xAxis,
           boundaryGap: false,
@@ -241,36 +300,57 @@ export default {
           },
           axisLine: {
             lineStyle: {
-              color: '#9f9f9f'
+              color: 'var(--font-color)'
             }
           },
           axisLabel: {
-            color: '#9f9f9f',
+            color: 'var(--font-color)',
             fontFamily: 'ProductSans',
           }
         },
-        yAxis: {
-          show: false,
-        },
+        yAxis: [
+          {
+            axisLine: {
+              lineStyle: {
+                color: 'var(--font-color)'
+              }
+            },
+            splitLine: {
+              lineStyle: {
+                color: 'var(--border-color)'
+              }
+            }
+          },
+          {
+            show: false,
+            max: 1e9
+          }
+        ],
         grid: {
           left: '20px',
           right: '20px'
         },
         series: [
           {
-            type: 'line',
+            type: 'candlestick',
             name: 'Rune Price',
-            showSymbol: false,
             data: runePrice,
-            smooth: true
+            itemStyle: {
+              color: "green",
+              color0: "#c23531",
+              borderColor: 'green',
+              borderColor0: '#c23531'
+            }
           },
           {
-            type: 'line',
-            name: 'Deterministic Rune Price',
-            showSymbol: false,
-            data: determinPrice,
-            smooth: true
-          },
+            name: 'Thorchain Trade Volume',
+            type: 'bar',
+            data: volume,
+            yAxisIndex: 1,
+            itemStyle: {
+              color: '#2962ff'
+            },
+          }
         ]
       };
 
@@ -312,11 +392,11 @@ export default {
           },
           axisLine: {
             lineStyle: {
-              color: '#9f9f9f'
+              color: 'var(--font-color)'
             }
           },
           axisLabel: {
-            color: '#9f9f9f',
+            color: 'var(--font-color)',
             fontFamily: 'ProductSans',
           }
         },
